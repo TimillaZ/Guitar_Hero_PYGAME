@@ -45,12 +45,12 @@ class Note:
         if self.x < -100: self.active = False
 
     def draw(self, surface):
-        pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), 35, 4) # Outer ring
-        pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), 28)    # Solid fill
-        pygame.draw.circle(surface, BG_COLOR, (int(self.x), int(self.y)), 12)     # Inner core
+        pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), 35, 4)
+        pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), 28)
+        pygame.draw.circle(surface, BG_COLOR, (int(self.x), int(self.y)), 12)
 
 class Player:
-    def __init__(self, name, keys, key_names, y_offset):
+    def __init__(self, name, keys, key_names):
         self.name = name
         self.keys = keys
         self.key_names = key_names
@@ -74,7 +74,6 @@ class Player:
             pygame.draw.line(self.surface, GRAY, (0, y), (WIDTH, y), 2)
             is_down = any(pressed[k] for k, v in self.keys.items() if v == i)
             
-            # Target nodes
             rad = 45 if is_down else 35
             width = 0 if is_down else 3
             pygame.draw.circle(self.surface, STRING_COLORS[i], (HIT_X, y), rad, width)
@@ -93,12 +92,12 @@ class TM4CGuitarHero:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
         self.clock = pygame.time.Clock()
         self.font_main = pygame.font.SysFont("trebuchetms", 36, bold=True)
-        self.font_title = pygame.font.SysFont("trebuchetms", 90, bold=True)
+        self.font_title = pygame.font.SysFont("trebuchetms", 110, bold=True)
         
         self.state = "MENU"
-        self.selected_song_idx = 0
-        self.p1 = Player("PLAYER 1", P1_KEYS, ["A","S","D","F","G","H"], 0)
-        self.p2 = Player("PLAYER 2", P2_KEYS, ["J","K","L",";","'","\\"], HALF_HEIGHT)
+        self.menu_index = 0  # 0-2 are songs, 3 is Quit
+        self.p1 = Player("PLAYER 1", P1_KEYS, ["A","S","D","F","G","H"])
+        self.p2 = Player("PLAYER 2", P2_KEYS, ["J","K","L",";","'","\\"])
         self.spawn_timer = 0
 
     def run(self):
@@ -126,42 +125,55 @@ class TM4CGuitarHero:
         title = self.font_title.render("TM4C GUITAR HERO", True, WHITE)
         self.screen.blit(title, (WIDTH//2 - title.get_width()//2, 100))
 
+        # Render Songs
         for i, song in enumerate(SONGS):
-            color = STRING_COLORS[i % 6] if i == self.selected_song_idx else GRAY
+            is_selected = (i == self.menu_index)
+            color = STRING_COLORS[i % 6] if is_selected else GRAY
             txt = self.font_main.render(f"{song['name']} - {song['desc']}", True, color)
-            rect = txt.get_rect(center=(WIDTH//2, 400 + i * 80))
-            if i == self.selected_song_idx:
-                pygame.draw.rect(self.screen, color, rect.inflate(40, 10), 2)
+            rect = txt.get_rect(center=(WIDTH//2, 450 + i * 85))
+            if is_selected:
+                pygame.draw.rect(self.screen, color, rect.inflate(50, 15), 3)
             self.screen.blit(txt, rect)
+
+        # Render Quit Button
+        is_quit_selected = (self.menu_index == 3)
+        quit_color = (255, 50, 50) if is_quit_selected else GRAY
+        quit_txt = self.font_main.render("QUIT GAME", True, quit_color)
+        quit_rect = quit_txt.get_rect(center=(WIDTH//2, 450 + 3 * 85 + 40))
+        if is_quit_selected:
+            pygame.draw.rect(self.screen, quit_color, quit_rect.inflate(50, 15), 3)
+        self.screen.blit(quit_txt, quit_rect)
 
         for event in events:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP: self.selected_song_idx = (self.selected_song_idx - 1) % len(SONGS)
-                if event.key == pygame.K_DOWN: self.selected_song_idx = (self.selected_song_idx + 1) % len(SONGS)
+                if event.key == pygame.K_UP: self.menu_index = (self.menu_index - 1) % 4
+                if event.key == pygame.K_DOWN: self.menu_index = (self.menu_index + 1) % 4
                 if event.key == pygame.K_RETURN:
-                    self.p1.reset(); self.p2.reset()
-                    self.state = "PLAYING"
+                    if self.menu_index == 3:
+                        self.quit_game()
+                    else:
+                        self.p1.reset(); self.p2.reset()
+                        self.state = "PLAYING"
 
     def pause_screen(self, events):
-        # Draw a semi-transparent overlay
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
+        overlay.fill((0, 0, 0, 200))
         self.screen.blit(overlay, (0,0))
         
         title = self.font_title.render("PAUSED", True, WHITE)
         resume = self.font_main.render("Press ESC to Resume", True, WHITE)
-        quit_txt = self.font_main.render("Press Q to Quit to Menu", True, STRING_COLORS[0])
+        quit_txt = self.font_main.render("Press Q to Return to Menu", True, STRING_COLORS[0])
         
         self.screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//3))
         self.screen.blit(resume, (WIDTH//2 - resume.get_width()//2, HEIGHT//2))
         self.screen.blit(quit_txt, (WIDTH//2 - quit_txt.get_width()//2, HEIGHT//2 + 100))
 
         for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q: self.state = "MENU"
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                self.state = "MENU"
 
     def gameplay_loop(self, events):
-        song = SONGS[self.selected_song_idx]
+        song = SONGS[self.menu_index]
         self.spawn_timer += 1
         
         if self.spawn_timer >= song['spawn_rate']:
@@ -171,7 +183,6 @@ class TM4CGuitarHero:
             self.spawn_timer = 0
 
         for p in [self.p1, self.p2]:
-            # Hit detection
             for event in events:
                 if event.type == pygame.KEYDOWN and event.key in p.keys:
                     idx = p.keys[event.key]
@@ -186,16 +197,14 @@ class TM4CGuitarHero:
             p.notes = [n for n in p.notes if n.active]
             p.draw_lane(self.font_main)
 
-        # Draw to screen
         self.screen.blit(self.p1.surface, (0, 0))
         self.screen.blit(self.p2.surface, (0, HALF_HEIGHT))
-        pygame.draw.line(self.screen, DIVIDER_COLOR, (0, HALF_HEIGHT), (WIDTH, HALF_HEIGHT), 4)
+        pygame.draw.line(self.screen, DIVIDER_COLOR, (0, HALF_HEIGHT), (WIDTH, HALF_HEIGHT), 6)
 
-        # UI Positioning (Cramp-free)
         s1 = self.font_main.render(f"P1 SCORE: {self.p1.score}", True, WHITE)
         s2 = self.font_main.render(f"P2 SCORE: {self.p2.score}", True, WHITE)
-        self.screen.blit(s1, (50, 20))
-        self.screen.blit(s2, (50, HALF_HEIGHT + 20))
+        self.screen.blit(s1, (60, 30))
+        self.screen.blit(s2, (60, HALF_HEIGHT + 30))
 
 if __name__ == "__main__":
     TM4CGuitarHero().run()
